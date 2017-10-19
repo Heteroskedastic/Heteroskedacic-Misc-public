@@ -84,13 +84,14 @@ class NotifyIfIdleEventHandler(object):
                     '{idle_hours} hours!</p>'
 
     def __init__(self, path, idle_time_threshold=timedelta(hours=12), retry_alert_interval=None, event_types=None,
-                 alert_type='email', email_to=None):
+                 alert_type='email', email_to=None, email_from=None):
         self.path = path
         self.idle_time_threshold = idle_time_threshold
         self.retry_alert_interval = retry_alert_interval or idle_time_threshold
         self.event_types = event_types
         self.alert_type = alert_type
         self.email_to = email_to
+        self.email_from = email_from
 
     def check_send_alert(self):
         last_alert = get_persist('last_alert', workspace=self.path)
@@ -102,7 +103,7 @@ class NotifyIfIdleEventHandler(object):
         message = self.ALERT_MESSAGE.format(path=self.path, idle_hours=self.idle_time_threshold)
         try:
             if self.alert_type == 'email':
-                send_mail(self.email_to, self.ALERT_SUBJECT, message, html=message)
+                send_mail(self.email_to, self.ALERT_SUBJECT, message, html=message, from_email=self.email_from)
             elif self.alert_type == 'sms':
                 print('Send SMS not implemented yet')
             else:
@@ -128,11 +129,12 @@ class NotifyIfIdleEventHandler(object):
             set_persist('last_modified', datetime.utcnow(), workspace=self.path)
 
 def main():
-    global MAILGUN_DOMAIN_NAME, MAILGUN_API_KEY, MAILGUN_DEFAULT_FROM, DEBUG
+    global MAILGUN_DOMAIN_NAME, MAILGUN_API_KEY, DEBUG
     parser = argparse.ArgumentParser(description='Directory watcher.')
     parser.add_argument('paths', type=str, nargs='+', help='directory path')
     parser.add_argument('--alert-type', help='alert type', choices=['email', 'sms'], default='email')
     parser.add_argument('--email-to', help='email to address separated by comma for multiple')
+    parser.add_argument('--email-from', help='email from address')
     parser.add_argument('--idle-time-threshold', type=int, help='idle time threshold in minutes', default=12*60)
     parser.add_argument('--retry-alert-interval', type=int, help='retry alert interval in minutes')
     parser.add_argument('--mailgun-domain', help='mailgun domain name')
@@ -172,7 +174,7 @@ def main():
             return
         event_handler = NotifyIfIdleEventHandler(
             path=path, idle_time_threshold=idle_time_threshold, alert_type=alert_type,
-            retry_alert_interval=retry_alert_interval, email_to=email_to)
+            retry_alert_interval=retry_alert_interval, email_to=email_to, email_from=args.email_from)
         observer.schedule(event_handler, path, recursive=True)
         event_handlers.append(event_handler)
     observer.start()
